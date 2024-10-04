@@ -74,7 +74,7 @@ def main():
         if password == "ANGSANA":
             if st.button("Start Transcription 📝"):
                 # Show a message while processing
-                with st.spinner("Transcribing audio, please wait... 🧠"):
+                with st.spinner("Longer recordings may take time to transcribe. Transcribing audio, please wait... 🧠"):
                     try:
                         # Delete any existing chunk files from previous runs
                         for file in os.listdir():
