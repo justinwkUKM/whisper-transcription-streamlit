@@ -40,6 +40,7 @@ def main():
 
     # Title and Description
     st.title("MP3 Transcription App 🎧")
+    st.write("Experimental Built by Waqas Khalid Obeidy")
     st.markdown(
         """
         ### Easily convert your MP3 audio files into text with the power of OpenAI's Whisper API.
@@ -179,7 +180,7 @@ def main():
     st.markdown("""
     ---
     ##### 🌟 Developed with Streamlit & OpenAI Whisper 🌟
-    📢 Feedback? Reach out to us!
+    📢 Feedback? email at waqasobeidy@gmail.com
     """)
 
 # Run the app
