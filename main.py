@@ -44,9 +44,13 @@ def main():
         """
     )
 
+
     # File uploader
     uploaded_file = st.file_uploader("Choose an MP3 file to transcribe", type=["mp3"], label_visibility="visible")
 
+    # Password input
+    password = st.text_input("Enter Password to Enable Transcription", type="password")
+    
     if uploaded_file is not None:
         # Language selection dropdown with default as English
         language_code, language_name = st.selectbox(
@@ -55,30 +59,32 @@ def main():
             index=0,  # Default to English
             format_func=lambda x: x[1]
         )
+        
+        if password == "ANGSANA":
 
-        # Start transcription button
-        if st.button("Start Transcription 📝"):
-            # Show a message while processing
-            with st.spinner("Transcribing audio, please wait... 🧠"):
-                # Send the audio file to Whisper API
-                uploaded_file.seek(0)  # Reset file pointer to the beginning
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=uploaded_file,
-                    language=language_code
-                )
+            # Start transcription button
+            if st.button("Start Transcription 📝"):
+                # Show a message while processing
+                with st.spinner("Transcribing audio, please wait... 🧠"):
+                    # Send the audio file to Whisper API
+                    uploaded_file.seek(0)  # Reset file pointer to the beginning
+                    transcript = client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=uploaded_file,
+                        language=language_code
+                    )
 
-                # Display the transcription
-                st.subheader("Transcription Result 📍:")
-                st.text_area("Transcription", transcript.text, height=200)
-                
-                # Download option for the transcription
-                st.download_button(
-                    label="Download Transcription as TXT",
-                    data=transcript.text,
-                    file_name="transcription.txt",
-                    mime="text/plain"
-                )
+                    # Display the transcription
+                    st.subheader("Transcription Result 📍:")
+                    st.text_area("Transcription", transcript.text, height=200)
+                    
+                    # Download option for the transcription
+                    st.download_button(
+                        label="Download Transcription as TXT",
+                        data=transcript.text,
+                        file_name="transcription.txt",
+                        mime="text/plain"
+                    )
 
     # Footer
     st.markdown("""
