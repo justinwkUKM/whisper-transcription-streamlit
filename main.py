@@ -5,14 +5,20 @@ import math
 import tempfile
 import wave
 import json
+import subprocess
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from dotenv import load_dotenv
 from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")  # Replace "OPENAI_API_KEY" with the variable name in your .env file
+azure_connection_string = os.getenv("AZURE_CONNECTION_STRING")  # Azure Blob Storage connection string
+container_name = os.getenv("AZURE_CONTAINER_NAME")  # Azure Blob Storage container name
 
 client = OpenAI()
+blob_service_client = BlobServiceClient.from_connection_string(azure_connection_string)
+container_client = blob_service_client.get_container_client(container_name)
 
 # List of top 100 languages (ISO 639-1 codes and language names)
 LANGUAGES = [
@@ -40,7 +46,6 @@ def main():
 
     # Title and Description
     st.title("MP3 Transcription App 🎧")
-    st.write("Experimental Built by Waqas Khalid Obeidy")
     st.markdown(
         """
         ### Easily convert your MP3 audio files into text with the power of OpenAI's Whisper API.
@@ -74,21 +79,21 @@ def main():
         if password == "ANGSANA":
             if st.button("Start Transcription 📝"):
                 # Show a message while processing
-                with st.spinner("Longer recordings may take time to transcribe. Transcribing audio, please wait... 🧠"):
+                with st.spinner("Transcribing audio, please wait... 🧠"):
                     try:
-                        # Delete any existing chunk files from previous runs
-                        for file in os.listdir():
-                            if file.startswith("temp_chunk_") and file.endswith(".wav"):
-                                os.remove(file)
-
                         # Save the uploaded mp3 file temporarily
                         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_mp3_file:
                             temp_mp3_file.write(uploaded_file.read())
                             temp_mp3_path = temp_mp3_file.name
 
-                        # Convert mp3 to wav using ffmpeg (via os.system)
+                        # Convert mp3 to wav using ffmpeg (via subprocess)
                         temp_wav_path = temp_mp3_path.replace(".mp3", ".wav")
-                        os.system(f"ffmpeg -i {temp_mp3_path} {temp_wav_path}")
+                        result = subprocess.run([
+                            "ffmpeg", "-i", temp_mp3_path, temp_wav_path
+                        ], capture_output=True, text=True)
+
+                        if result.returncode != 0:
+                            raise Exception(f"ffmpeg error: {result.stderr}")
 
                         # Read the wav file and determine the duration
                         with wave.open(temp_wav_path, "rb") as wav_file:
@@ -109,10 +114,28 @@ def main():
 
                                 # Extract the chunk using ffmpeg
                                 temp_chunk_path = f"temp_chunk_{i}.wav"
-                                os.system(f"ffmpeg -i {temp_wav_path} -ss {start_time} -to {end_time} -c copy {temp_chunk_path}")
+                                result = subprocess.run([
+                                    "ffmpeg", "-i", temp_wav_path, "-ss", str(start_time), "-to", str(end_time), "-c", "copy", temp_chunk_path
+                                ], capture_output=True, text=True)
 
-                                # Transcribe the chunk
+                                if result.returncode != 0:
+                                    raise Exception(f"ffmpeg error: {result.stderr}")
+
+                                # Upload chunk to Azure Blob Storage
+                                blob_name = f"{uploaded_file.name}_chunk_{i}.wav"
+                                blob_client = container_client.get_blob_client(blob_name)
                                 with open(temp_chunk_path, "rb") as chunk_file:
+                                    blob_client.upload_blob(chunk_file, overwrite=True)
+                                
+                                # Delete the temp chunk file from local system after uploading to Azure
+                                os.remove(temp_chunk_path)
+                                
+                                # Transcribe the chunk directly from Azure Blob Storage
+                                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_download_file:
+                                    blob_client.download_blob().download_to_stream(temp_download_file)
+                                    temp_download_path = temp_download_file.name
+
+                                with open(temp_download_path, "rb") as chunk_file:
                                     prompt = f"Transcribe the audio. The file mainly consists of {language_name}. {custom_instructions}" if custom_instructions else f"Transcribe the audio. The file mainly consists of {language_name}."
                                     chunk_transcript = client.audio.transcriptions.create(
                                         model="whisper-1",
@@ -131,7 +154,7 @@ def main():
                                     # Add or update the chunk transcription in the JSON file
                                     if uploaded_file.name not in transcript_data:
                                         transcript_data[uploaded_file.name] = ""
-                                    transcript_data[uploaded_file.name] += f"{chunk_transcript.text}\n"
+                                    transcript_data[uploaded_file.name] += f"\nChunk {i+1}:\n" + chunk_transcript.text
 
                                     # Save the updated JSON file
                                     with open("transcriptions.json", "w") as json_file:
@@ -180,7 +203,7 @@ def main():
     st.markdown("""
     ---
     ##### 🌟 Developed with Streamlit & OpenAI Whisper 🌟
-    📢 Feedback? email at waqasobeidy@gmail.com
+    📢 Feedback? Reach out to us!
     """)
 
 # Run the app
@@ -191,4 +214,5 @@ if __name__ == "__main__":
 # streamlit
 # openai
 # python-dotenv
+# azure-storage-blob
 # ffmpeg (install separately, e.g., via apt, brew, or download from ffmpeg.org)
